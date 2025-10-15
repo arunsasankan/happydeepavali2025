@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Happy Deepavali 2025</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Inter', sans-serif;
+            /* Custom cursor for a more thematic feel */
+            cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24' fill='white'%3E%3Cpath d='M12 2.5l-7.5 19 7.5-4 7.5 4z'/%3E%3C/svg%3E"), auto;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #info-box {
+            position: absolute;
+            top: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.5);
+            text-align: center;
+            width: 100%;
+        }
+
+        #greeting {
+            transition: color 0.5s ease;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="fireworksCanvas"></canvas>
+    <div id="info-box">
+        <h1 id="greeting" class="text-2xl md:text-4xl font-bold text-amber-300">Happy Deepavali Resillion!</h1>
+        <p class="text-lg md:text-xl mt-2">Click or tap anywhere to launch a firework!</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('fireworksCanvas');
+        const ctx = canvas.getContext('2d');
+        const greeting = document.getElementById('greeting');
+        const infoParagraph = document.querySelector('#info-box p');
+
+
+        let fireworks = [];
+        let particles = [];
+        let stars = [];
+        let hue = 120; // Start with green hue
+        const starCount = 200;
+        let audioStarted = false;
+
+        // --- Sound Effects with Tone.js ---
+        const launchSynth = new Tone.Synth().toDestination();
+        launchSynth.volume.value = -20;
+
+        const explosionSynth = new Tone.NoiseSynth({
+            noise: { type: 'pink' },
+            envelope: { attack: 0.001, decay: 0.15, sustain: 0 },
+        }).toDestination();
+        explosionSynth.volume.value = -10;
+
+        // New synth for the crackling rocket sound
+        const crackleSynth = new Tone.NoiseSynth({
+            noise: { type: 'white' },
+            envelope: { attack: 0.001, decay: 0.05, sustain: 0 },
+        }).toDestination();
+        crackleSynth.volume.value = -18;
+
+        function playLaunchSound() {
+            if (!audioStarted) return;
+            // Standard "whoosh" sound for all launches
+            launchSynth.triggerAttackRelease("C2", "1s");
+            launchSynth.frequency.rampTo("C4", 1);
+
+            // Randomly add a crackling effect for some fireworks
+            if (Math.random() < 0.33) {
+                const now = Tone.now();
+                // Schedule a series of short crackles for the rocket effect
+                for (let i = 0; i < 5; i++) {
+                    crackleSynth.triggerAttackRelease("0.05s", now + i * 0.1);
+                }
+            }
+        }
+
+        function playExplosionSound(sizeMultiplier = 1) {
+            if (!audioStarted) return;
+            // Adjust sound based on the firework's size
+            explosionSynth.envelope.decay = 0.15 * sizeMultiplier;
+            explosionSynth.volume.value = -10 + (sizeMultiplier - 1) * 4; // Bigger fireworks are slightly louder
+            explosionSynth.triggerAttackRelease("0.5s");
+        }
+
+
+        // Set canvas to full screen
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Function to generate a random number within a range
+        function random(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+
+        // Star class for the night sky effect
+        class Star {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.radius = Math.random() * 1.2;
+                this.alpha = random(0.5, 1);
+                this.twinkleSpeed = random(0.015, 0.025);
+                this.twinkleDirection = 1;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${this.alpha})`;
+                ctx.fill();
+            }
+
+            update() {
+                if (this.alpha > 1 || this.alpha < 0.5) {
+                    this.twinkleDirection *= -1;
+                }
+                this.alpha += this.twinkleSpeed * this.twinkleDirection;
+            }
+        }
+
+        function createStars() {
+            for (let i = 0; i < starCount; i++) {
+                stars.push(new Star());
+            }
+        }
+
+
+        // Particle class for the explosion debris
+        class Particle {
+            constructor(x, y, hue) {
+                this.x = x;
+                this.y = y;
+                this.hue = hue;
+                this.angle = random(0, Math.PI * 2);
+                this.speed = random(1, 10);
+                this.friction = 0.95;
+                this.gravity = 1;
+                this.alpha = 1;
+                this.decay = random(0.015, 0.03);
+                this.coordinates = [];
+                this.coordinateCount = 5;
+
+                // Store previous positions for a trailing effect
+                while (this.coordinateCount--) {
+                    this.coordinates.push([this.x, this.y]);
+                }
+            }
+
+            update() {
+                this.coordinates.pop();
+                this.coordinates.unshift([this.x, this.y]);
+
+                this.speed *= this.friction;
+                this.x += Math.cos(this.angle) * this.speed;
+                this.y += Math.sin(this.angle) * this.speed + this.gravity;
+                this.alpha -= this.decay;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.moveTo(this.coordinates[this.coordinates.length - 1][0], this.coordinates[this.coordinates.length - 1][1]);
+                ctx.lineTo(this.x, this.y);
+                ctx.strokeStyle = `hsla(${this.hue}, 100%, 50%, ${this.alpha})`;
+                ctx.lineWidth = random(1, 3);
+                ctx.stroke();
+            }
+        }
+
+        // Firework class for the initial rocket
+        class Firework {
+            constructor(startX, startY, endX, endY) {
+                this.x = startX;
+                this.y = startY;
+                this.startX = startX;
+                this.startY = startY;
+                this.endX = endX;
+                this.endY = endY;
+                this.distanceToEnd = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+                this.distanceTraveled = 0;
+                this.angle = Math.atan2(endY - startY, endX - startX);
+                this.speed = 2;
+                this.acceleration = 1.05;
+                this.brightness = random(50, 70);
+                this.hue = hue;
+                this.size = random(0.8, 1.5); // Randomize the explosion size
+                this.coordinates = [];
+                this.coordinateCount = 3;
+
+                while (this.coordinateCount--) {
+                    this.coordinates.push([this.x, this.y]);
+                }
+            }
+
+            update() {
+                this.coordinates.pop();
+                this.coordinates.unshift([this.x, this.y]);
+
+                this.speed *= this.acceleration;
+                const vx = Math.cos(this.angle) * this.speed;
+                const vy = Math.sin(this.angle) * this.speed;
+
+                this.distanceTraveled = Math.sqrt(Math.pow(this.x - this.startX, 2) + Math.pow(this.y - this.startY, 2));
+
+                if (this.distanceTraveled >= this.distanceToEnd) {
+                    playExplosionSound(this.size);
+                    createParticles(this.endX, this.endY, this.hue, this.size);
+                    return true; // Mark for removal
+                } else {
+                    this.x += vx;
+                    this.y += vy;
+                    return false;
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.moveTo(this.coordinates[this.coordinates.length - 1][0], this.coordinates[this.coordinates.length - 1][1]);
+                ctx.lineTo(this.x, this.y);
+                ctx.strokeStyle = `hsl(${this.hue}, 100%, ${this.brightness}%)`;
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+        }
+
+        function createParticles(x, y, hue, sizeMultiplier = 1) {
+            const particleCount = 50 * sizeMultiplier; // More particles for bigger fireworks
+            for (let i = 0; i < particleCount; i++) {
+                particles.push(new Particle(x, y, hue));
+            }
+        }
+
+        function animate() {
+            // Draw a semi-transparent black background for a fading trail effect
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw and update stars
+            for (const star of stars) {
+                star.draw();
+                star.update();
+            }
+
+            // Set composite operation for the fireworks glow
+            ctx.globalCompositeOperation = 'lighter';
+
+            // Animate fireworks
+            for (let i = fireworks.length - 1; i >= 0; i--) {
+                fireworks[i].draw();
+                if (fireworks[i].update()) {
+                    fireworks.splice(i, 1); // Remove if exploded
+                }
+            }
+
+            // Animate particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].draw();
+                particles[i].update();
+                if (particles[i].alpha <= particles[i].decay) {
+                    particles.splice(i, 1); // Remove if faded out
+                }
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        // Event listener for launching fireworks on click/tap
+        window.addEventListener('click', (e) => {
+            // Start audio on first user interaction
+            if (!audioStarted) {
+                Tone.start();
+                audioStarted = true;
+                infoParagraph.style.transition = 'opacity 1s';
+                infoParagraph.style.opacity = '0';
+            }
+
+            hue += random(10, 20); // Change color for next firework
+            greeting.style.color = `hsl(${hue}, 100%, 70%)`;
+
+            const startX = canvas.width / 2;
+            const startY = canvas.height;
+            const endX = e.clientX;
+            const endY = e.clientY;
+
+            fireworks.push(new Firework(startX, startY, endX, endY));
+            playLaunchSound();
+        });
+
+        // Auto-launch a few fireworks on load for demonstration
+        setTimeout(() => {
+            if (fireworks.length === 0) { // Only launch if user hasn't clicked yet
+                greeting.style.color = `hsl(${hue}, 100%, 70%)`;
+                fireworks.push(new Firework(canvas.width / 2, canvas.height, random(0, canvas.width), random(0, canvas.height / 2)));
+                playLaunchSound();
+            }
+        }, 1000);
+
+        setTimeout(() => {
+            if (fireworks.length <= 1) { // Only launch if user hasn't clicked much
+                hue += 30;
+                greeting.style.color = `hsl(${hue}, 100%, 70%)`;
+                fireworks.push(new Firework(canvas.width / 2, canvas.height, random(0, canvas.width), random(0, canvas.height / 2)));
+                playLaunchSound();
+            }
+        }, 2500);
+
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            // Regenerate stars for the new canvas size
+            stars = [];
+            createStars();
+        });
+
+        // Initial setup
+        createStars();
+        animate();
+    </script>
+</body>
+
+</html>
